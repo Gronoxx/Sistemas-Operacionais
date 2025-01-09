@@ -77,18 +77,46 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
-  case T_PGFLT: {
-    uint va = rcr2();
-    // if((tf->err & 0x2) && is_cow_page(va)) { // pseudo-check
-    //   if(refcount > 1) {
-    //     // allocate new page
-    //   } else {
-    //     // clear PTE_COW, set PTE_W
-    //   }
-    //   switchuvm(myproc());
-    // }
-    break;
+case T_PGFLT: {
+  uint va = rcr2();  // Retrieve faulting address
+
+  // Check for write error and CoW page directly
+  if (tf->err & 0x2) {
+    // Retrieve the page table entry
+    pte_t *pte = walkpgdir(myproc()->pgdir, (void *)va, 0);
+
+    if (pte == 0) {
+      panic("page fault with no page table entry");
+    }
+
+    // Check if the page is marked as CoW
+    if (*pte & PTE_COW) {
+      if (refcount(P2V(PTE_ADDR(*pte))) > 1) {
+        // Allocate a new page
+        char *mem = kalloc();
+        if (mem == 0) {
+          panic("out of memory during CoW page fault");
+        }
+        memmove(mem, (char *)P2V(PTE_ADDR(*pte)), PGSIZE);
+
+        // Update the page table entry
+        *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
+        decr_ref_count(P2V(PTE_ADDR(*pte)));  // Decrement the reference count of the original page
+      } else {
+        // Clear PTE_COW, set PTE_W
+        *pte |= PTE_W;
+        *pte &= ~PTE_COW;
+      }
+
+      // Flush the TLB by switching to the process's address space
+      lcr3(V2P(myproc()->pgdir));
+    }
   }
+
+  break;
+}
+
+
 
   //PAGEBREAK: 13
   default:

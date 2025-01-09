@@ -23,7 +23,7 @@ struct {
   struct run *freelist;
 } kmem;
 
-static int refcount[PHYSTOP/PGSIZE];
+int ref_counts[PHYSTOP / PGSIZE]; // Reference count array
 
 // Initialization happens in two phases.
 // 1. main() calls kinit1() while still using entrypgdir to place just
@@ -53,7 +53,7 @@ freerange(void *vstart, void *vend)
   for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
     kfree(p);
 }
-//PAGEBREAK: 21
+
 // Free the page of physical memory pointed at by v,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
@@ -69,10 +69,10 @@ kfree(char *v)
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
-  int rcindex = V2P(v)/PGSIZE;
-  if(refcount[rcindex] > 0)
-    refcount[rcindex]--;
-  if(refcount[rcindex] == 0){
+  int rcindex = V2P(v) / PGSIZE;
+  if(ref_counts[rcindex] > 0)
+    ref_counts[rcindex]--;
+  if(ref_counts[rcindex] == 0){
     // free the page
     if(kmem.use_lock)
       acquire(&kmem.lock);
@@ -97,10 +97,44 @@ kalloc(void)
   r = kmem.freelist;
   if(r){
     kmem.freelist = r->next;
-    refcount[V2P(r)/PGSIZE] = 1; // initialize refcount
+    ref_counts[V2P(r) / PGSIZE] = 1; // initialize refcount
   }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;
 }
+
+
+// Function implementations
+int get_ref_count(char *pa) {
+  int index = V2P(pa) / PGSIZE;
+  return ref_counts[index];
+}
+
+void decrease_ref_count(char *pa) {
+  int index = V2P(pa) / PGSIZE;
+  ref_counts[index]--;
+}
+
+// Reference count functions
+int refcount(char *pa) {
+  acquire(&kmem.lock);
+  int count = get_ref_count(pa);
+  release(&kmem.lock);
+  return count;
+}
+
+void decr_ref_count(char *pa) {
+  acquire(&kmem.lock);
+  decrease_ref_count(pa);
+  release(&kmem.lock);
+}
+
+void incr_ref_count(char *pa) {
+  acquire(&kmem.lock);
+  int index = V2P(pa) / PGSIZE;
+  ref_counts[index]++;
+  release(&kmem.lock);
+}
+
 
