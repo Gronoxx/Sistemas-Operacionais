@@ -23,6 +23,8 @@ struct {
   struct run *freelist;
 } kmem;
 
+static int refcount[PHYSTOP/PGSIZE];
+
 // Initialization happens in two phases.
 // 1. main() calls kinit1() while still using entrypgdir to place just
 // the pages mapped by entrypgdir on free list.
@@ -67,13 +69,19 @@ kfree(char *v)
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
-  if(kmem.use_lock)
-    acquire(&kmem.lock);
-  r = (struct run*)v;
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  if(kmem.use_lock)
-    release(&kmem.lock);
+  int rcindex = V2P(v)/PGSIZE;
+  if(refcount[rcindex] > 0)
+    refcount[rcindex]--;
+  if(refcount[rcindex] == 0){
+    // free the page
+    if(kmem.use_lock)
+      acquire(&kmem.lock);
+    r = (struct run*)v;
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+    if(kmem.use_lock)
+      release(&kmem.lock);
+  }
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -87,8 +95,10 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    refcount[V2P(r)/PGSIZE] = 1; // initialize refcount
+  }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;

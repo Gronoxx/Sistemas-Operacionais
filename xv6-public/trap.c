@@ -77,6 +77,18 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  case T_PGFLT: {
+    uint va = rcr2();
+    // if((tf->err & 0x2) && is_cow_page(va)) { // pseudo-check
+    //   if(refcount > 1) {
+    //     // allocate new page
+    //   } else {
+    //     // clear PTE_COW, set PTE_W
+    //   }
+    //   switchuvm(myproc());
+    // }
+    break;
+  }
 
   //PAGEBREAK: 13
   default:
