@@ -109,8 +109,11 @@ make qemu
 # 📂 Estrutura de Arquivos
 
 user.h: Cabeçalhos das chamadas de sistema.
+
 syscall.c e syscall.h: Registro e roteamento das chamadas.
+
 vm.c: Gerenciamento de tabelas de páginas.
+
 kalloc.c: Gerenciamento de frames de memória.
 
 # 📖 Conclusão
