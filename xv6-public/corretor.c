@@ -47,29 +47,19 @@ int caso2forkcow(void) {
 
   printf(stdout, "[--Caso 2.1] Testando %d chamadas forkcow\n", N);
 
-  for(n = 0; n < N; n++) {
-    printf(stdout, "Calling forkcow #%d\n", n);
+  for(n=0; n<N; n++){
     pid = forkcow();
-    if (pid < 0) {
+    if(pid < 0) {
       printf(stdout, "[--Caso 2.1 - ERROR] Fork %d falhou!\n", n);
       return FALSE;
     }
-    if (pid == 0) {
-      printf(stdout, "Closing the child with pid %d\n", getpid());
-      exit();  // Close child
-      printf(stdout, "Child with pid %d exited\n", getpid());  // This should never be reached
-    } else {
-      printf(stdout, "Waiting for pid %d\n", pid);
-      if (wait() < 0) {
-        printf(stdout, "[--Caso 2.1 - ERROR] Wait for pid %d failed!\n", pid);
-        return FALSE;
-      }
-      printf(stdout, "Finished waiting for pid %d\n", pid);
-    }
+    if(pid == 0)
+      exit();   // fecha filho
+    else
+      if (wait() < 0) return FALSE;
   }
   return TRUE;
 }
-
 
 
 // testa que o processo parent e child tem o mesmo num de pgs

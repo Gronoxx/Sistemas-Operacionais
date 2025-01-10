@@ -32,6 +32,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
+
 pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
@@ -187,6 +188,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   if(sz >= PGSIZE)
     panic("inituvm: more than a page");
   mem = kalloc();
+  incr_ref_count(V2P(mem));
   memset(mem, 0, PGSIZE);
   mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
   memmove(mem, init, sz);
@@ -232,6 +234,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
     mem = kalloc();
+    incr_ref_count(V2P(mem));
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
       deallocuvm(pgdir, newsz, oldsz);
@@ -271,8 +274,11 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       if(pa == 0)
         panic("kfree");
       char *v = P2V(pa);
+      decrement_ref_count(pa);
+      if(get_ref_count(pa) == 0){
       kfree(v);
-      *pte = 0;
+        *pte = 0;
+      }
     }
   }
   return newsz;
@@ -353,24 +359,35 @@ copyuvmcow(pde_t *pgdir, uint sz)
 
   if((d = setupkvm()) == 0)
     return 0;
+
   for(i = 0; i < sz; i += PGSIZE){
+
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvmcow: pte should exist");
+      panic("copyuvm: pte should exist");
+
     if(!(*pte & PTE_P))
-      panic("copyuvmcow: page not present");
+      panic("copyuvm: page not present");
+
     pa = PTE_ADDR(*pte);
+
     flags = PTE_FLAGS(*pte);
+    incr_ref_count(pa);
+    // Marcar página como READ ONLY e incrementar contador de referências
     *pte &= ~PTE_W;
-    *pte |= PTE_COW;
-    incr_ref_count((char *)P2V(pa));
+    *pte |= PTE_COW;  // Marcar como Copy-on-Write
+
     if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0) {
       goto bad;
     }
+
   }
+  
+  lcr3(V2P(pgdir));
   return d;
 
 bad:
   freevm(d);
+  lcr3(V2P(pgdir));
   return 0;
 }
 

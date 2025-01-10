@@ -53,7 +53,7 @@ freerange(void *vstart, void *vend)
   for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
     kfree(p);
 }
-
+//PAGEBREAK: 21
 // Free the page of physical memory pointed at by v,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
@@ -69,19 +69,13 @@ kfree(char *v)
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
-  int rcindex = V2P(v) / PGSIZE;
-  if(ref_counts[rcindex] > 0)
-    ref_counts[rcindex]--;
-  if(ref_counts[rcindex] == 0){
-    // free the page
-    if(kmem.use_lock)
-      acquire(&kmem.lock);
-    r = (struct run*)v;
-    r->next = kmem.freelist;
-    kmem.freelist = r;
-    if(kmem.use_lock)
-      release(&kmem.lock);
-  }
+  if(kmem.use_lock)
+    acquire(&kmem.lock);
+  r = (struct run*)v;
+  r->next = kmem.freelist;
+  kmem.freelist = r;
+  if(kmem.use_lock)
+    release(&kmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -95,46 +89,43 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r){
+  if(r)
     kmem.freelist = r->next;
-    ref_counts[V2P(r) / PGSIZE] = 1; // initialize refcount
-  }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;
 }
 
 
-// Function implementations
-int get_ref_count(char *pa) {
-  int index = V2P(pa) / PGSIZE;
-  return ref_counts[index];
+int get_ref_count(uint pa) {  
+  int index = pa / PGSIZE;
+  if (index < PHYSTOP / PGSIZE) {
+    return ref_counts[index];
+  }
+  return -1;  
 }
 
-void decrease_ref_count(char *pa) {
-  int index = V2P(pa) / PGSIZE;
-  ref_counts[index]--;
-}
-
-// Reference count functions
-int refcount(char *pa) {
+void incr_ref_count(uint pa) {  
   acquire(&kmem.lock);
-  int count = get_ref_count(pa);
-  release(&kmem.lock);
-  return count;
-}
-
-void decr_ref_count(char *pa) {
-  acquire(&kmem.lock);
-  decrease_ref_count(pa);
+  int index = pa / PGSIZE;  
+  if (index < PHYSTOP / PGSIZE) {
+    ref_counts[index]++;
+  }
   release(&kmem.lock);
 }
 
-void incr_ref_count(char *pa) {
-  acquire(&kmem.lock);
-  int index = V2P(pa) / PGSIZE;
-  ref_counts[index]++;
-  release(&kmem.lock);
+void decrement_ref_count(uint pa) {
+  acquire(&kmem.lock);  // Lock to ensure thread safety
+
+  int index = pa / PGSIZE;  // Get the index of the physical page
+    if (ref_counts[index] > 0) {
+      ref_counts[index]--;  // Decrease the reference count
+    } 
+
+  release(&kmem.lock);  // Release the lock
 }
+
+
+
 
 

@@ -224,57 +224,46 @@ fork(void)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
-int 
-forkcow(void) {
+int
+forkcow(void)
+{
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
 
-  cprintf("forkcow: Starting process forking\n");
-
-  if((np = allocproc()) == 0) {
-    cprintf("forkcow: allocproc failed\n");
+  // Allocate process.
+  if((np = allocproc()) == 0){
     return -1;
   }
 
-  // Use copyuvmcow instead of copyuvm
-  cprintf("forkcow: allocproc succeeded, now calling copyuvmcow\n");
-  if((np->pgdir = copyuvmcow(curproc->pgdir, curproc->sz)) == 0) {
-    cprintf("forkcow: copyuvmcow failed\n");
+  // Copy process state from proc.
+  if((np->pgdir = copyuvmcow(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
-
-  cprintf("forkcow: copyuvmcow succeeded\n");
-
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
-  for(i = 0; i < NOFILE; i++) {
-    if(curproc->ofile[i]) {
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
-      if (np->ofile[i] == 0) {
-        cprintf("forkcow: filedup failed for fd %d\n", i);
-      }
-    }
-  }
-
-  cprintf("forkcow: file descriptors duplicated\n");
-
   np->cwd = idup(curproc->cwd);
+
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
 
   acquire(&ptable.lock);
-  np->state = RUNNABLE;
-  release(&ptable.lock);
 
-  cprintf("forkcow: new process created with pid %d\n", pid);
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
 
   return pid;
 }

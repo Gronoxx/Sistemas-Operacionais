@@ -77,45 +77,37 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
-case T_PGFLT: {
-  uint va = rcr2();  // Retrieve faulting address
-
-  // Check for write error and CoW page directly
-  if (tf->err & 0x2) {
-    // Retrieve the page table entry
+  case T_PGFLT:{    
+  uint va = rcr2();
     pte_t *pte = walkpgdir(myproc()->pgdir, (void *)va, 0);
-
-    if (pte == 0) {
-      panic("page fault with no page table entry");
+    if (!pte || !(*pte & PTE_P) || !(*pte & PTE_COW)) {
+      cprintf("PAGEFAULT: invalid access at %x\n", va);
+      myproc()->killed = 1;
+      return;
     }
 
-    // Check if the page is marked as CoW
-    if (*pte & PTE_COW) {
-      if (refcount(P2V(PTE_ADDR(*pte))) > 1) {
-        // Allocate a new page
-        char *mem = kalloc();
-        if (mem == 0) {
-          panic("out of memory during CoW page fault");
-        }
-        memmove(mem, (char *)P2V(PTE_ADDR(*pte)), PGSIZE);
+    uint pa = PTE_ADDR(*pte);
+    char *mem;
 
-        // Update the page table entry
-        *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
-        decr_ref_count(P2V(PTE_ADDR(*pte)));  // Decrement the reference count of the original page
-      } else {
-        // Clear PTE_COW, set PTE_W
-        *pte |= PTE_W;
-        *pte &= ~PTE_COW;
+    if (get_ref_count(pa) > 1) {
+      if ((mem = kalloc()) == 0) {
+        cprintf("PAGEFAULT: kalloc failed\n");
+        myproc()->killed = 1;
+        break;
       }
-
-      // Flush the TLB by switching to the process's address space
-      lcr3(V2P(myproc()->pgdir));
+      memmove(mem, (char *)P2V(pa), PGSIZE);
+      *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
+      incr_ref_count(V2P(mem));
+      decrement_ref_count(pa);
+    } else if( get_ref_count(pa) == 1) {
+      *pte |= PTE_W;
+      *pte &= ~PTE_COW;
+    }else{
+      cprintf("Error");
     }
+    lcr3(V2P(myproc()->pgdir));
+    break;
   }
-
-  break;
-}
-
 
 
   //PAGEBREAK: 13

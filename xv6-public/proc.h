@@ -61,11 +61,6 @@ struct proc {
 pde_t *copyuvmcow(pde_t *pgdir, uint sz);
 int forkcow(void);
 pte_t *walkpgdir(pde_t *pgdir, const void *va, int alloc);
-
-int get_ref_count(char *pa);  // Declaration for get_ref_count
-void decrease_ref_count(char *pa);  // Declaration for decrease_ref_count
-
-int refcount(char *pa);  // Declaration for refcount
-void decr_ref_count(char *pa);  // Declaration for decr_ref_count
-void incr_ref_count(char *pa);  // Declaration for incr_ref_count
-
+int get_ref_count(uint);  // Declaration for get_ref_count
+void incr_ref_count(uint);  // Declaration for incr_ref_count
+void decrement_ref_count(uint);
