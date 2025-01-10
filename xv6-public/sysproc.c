@@ -14,6 +14,12 @@ sys_fork(void)
 }
 
 int
+sys_forkcow(void)
+{
+  return forkcow();
+}
+
+int
 sys_exit(void)
 {
   exit();
@@ -102,4 +108,49 @@ sys_date(void)
   cmostime(r);
 
   return 0;
+}
+
+
+
+
+int
+sys_virt2real(void)
+{
+
+  char *ptr;
+  argptr(0, &ptr, sizeof(char*));
+
+  pde_t *pgdir = myproc()->pgdir;
+  pte_t *pte = walkpgdir(pgdir, ptr, 0);
+
+  if (pte == 0 || !(*pte & PTE_P)) {
+    return 0;
+  }
+
+  return (int)PTE_ADDR(*pte) + ((uint)ptr & 0xFFF);
+}
+
+int
+sys_num_pages(void)
+{
+  struct proc *p = myproc(); 
+    if (!p) {
+        return 0; 
+    }
+
+    pde_t *pgdir = p->pgdir; 
+    int count = 0;
+
+    for (int i = 0; i < NPDENTRIES; i++) {
+        if (pgdir[i] & PTE_P) { 
+            pte_t *pte = (pte_t *)P2V(PTE_ADDR(pgdir[i])); 
+            for (int j = 0; j < NPTENTRIES; j++) {
+                if (pte[j] & PTE_P) { 
+                    count++; 
+                }
+            }
+        }
+    }
+
+    return count;
 }

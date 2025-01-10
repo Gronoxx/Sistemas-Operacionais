@@ -56,3 +56,11 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+
+pde_t *copyuvmcow(pde_t *pgdir, uint sz);
+int forkcow(void);
+pte_t *walkpgdir(pde_t *pgdir, const void *va, int alloc);
+int get_ref_count(uint);  // Declaration for get_ref_count
+void incr_ref_count(uint);  // Declaration for incr_ref_count
+void decrement_ref_count(uint);

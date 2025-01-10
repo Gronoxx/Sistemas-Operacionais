@@ -77,6 +77,38 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  case T_PGFLT:{    
+  uint va = rcr2();
+    pte_t *pte = walkpgdir(myproc()->pgdir, (void *)va, 0);
+    if (!pte || !(*pte & PTE_P) || !(*pte & PTE_COW)) {
+      cprintf("PAGEFAULT: invalid access at %x\n", va);
+      myproc()->killed = 1;
+      return;
+    }
+
+    uint pa = PTE_ADDR(*pte);
+    char *mem;
+
+    if (get_ref_count(pa) > 1) {
+      if ((mem = kalloc()) == 0) {
+        cprintf("PAGEFAULT: kalloc failed\n");
+        myproc()->killed = 1;
+        break;
+      }
+      memmove(mem, (char *)P2V(pa), PGSIZE);
+      *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
+      incr_ref_count(V2P(mem));
+      decrement_ref_count(pa);
+    } else if( get_ref_count(pa) == 1) {
+      *pte |= PTE_W;
+      *pte &= ~PTE_COW;
+    }else{
+      cprintf("Error");
+    }
+    lcr3(V2P(myproc()->pgdir));
+    break;
+  }
+
 
   //PAGEBREAK: 13
   default:

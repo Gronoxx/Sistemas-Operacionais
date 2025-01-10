@@ -23,6 +23,8 @@ struct {
   struct run *freelist;
 } kmem;
 
+int ref_counts[PHYSTOP / PGSIZE]; // Reference count array
+
 // Initialization happens in two phases.
 // 1. main() calls kinit1() while still using entrypgdir to place just
 // the pages mapped by entrypgdir on free list.
@@ -93,4 +95,37 @@ kalloc(void)
     release(&kmem.lock);
   return (char*)r;
 }
+
+
+int get_ref_count(uint pa) {  
+  int index = pa / PGSIZE;
+  if (index < PHYSTOP / PGSIZE) {
+    return ref_counts[index];
+  }
+  return -1;  
+}
+
+void incr_ref_count(uint pa) {  
+  acquire(&kmem.lock);
+  int index = pa / PGSIZE;  
+  if (index < PHYSTOP / PGSIZE) {
+    ref_counts[index]++;
+  }
+  release(&kmem.lock);
+}
+
+void decrement_ref_count(uint pa) {
+  acquire(&kmem.lock);  // Lock to ensure thread safety
+
+  int index = pa / PGSIZE;  // Get the index of the physical page
+    if (ref_counts[index] > 0) {
+      ref_counts[index]--;  // Decrease the reference count
+    } 
+
+  release(&kmem.lock);  // Release the lock
+}
+
+
+
+
 
